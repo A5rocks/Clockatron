@@ -281,4 +281,8 @@ defmodule Clockatron do
 
     {:noreply, {o, procs, mons}}
   end
+
+  def handle_info(unhandled_msg, state) do
+    {:noreply, state}
+  end
 end
