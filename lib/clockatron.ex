@@ -141,7 +141,7 @@ defmodule Clockatron do
     end
   end
 
-  def handle_call({:resume, name, state, start}, _from, {o, procs, mons}) do
+  def handle_call({:resume, name, state, start}, from, {o, procs, mons}) do
     {module, function, _} = start
     pid = :proc_lib.spawn(
       fn ->
@@ -153,10 +153,12 @@ defmodule Clockatron do
 
     mid = :erlang.monitor(:process, pid)
 
-    # this might error, just check it exists first
     :ets.delete(o, name)
     :ets.insert(procs, {name, pid, mid, start})
     :ets.insert(mons, {mid, name})
+
+    # make sure they keep this proc in `others`
+    send from, {:new_process, {name, start}}
 
     {:reply, :ok, {o, procs, mons}}
   end
@@ -282,6 +284,12 @@ defmodule Clockatron do
     :ets.insert(mons, {mid, name})
 
     {:noreply, {o, procs, mons}}
+  end
+
+  def handle_info({:new_process, {name, start}}, state) do
+    handle_call({:new_process, {name, start}}, 1, state)
+
+    {:noreply, state}
   end
 
   def handle_info(_unhandled_msg, state) do
