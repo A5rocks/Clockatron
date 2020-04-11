@@ -37,7 +37,6 @@ defmodule Clockatron.Listener do
   end
 
   def handle_info({:nodedown, old_node}, state) do
-    IO.inspect old_node, label: "this went down"
     HashRing.remove(old_node)
 
     GenServer.call(Clockatron, :dead_node, :infinity)
@@ -49,6 +48,7 @@ end
 defmodule Clockatron do
   @start_cd 5_000
   use GenServer
+  require Logger
 
   def start(name, module, args) do
     start(name, module, :init, args)
@@ -153,6 +153,8 @@ defmodule Clockatron do
 
     mid = :erlang.monitor(:process, pid)
 
+    # this might error, just check it exists first
+    :ets.delete(o, name)
     :ets.insert(procs, {name, pid, mid, start})
     :ets.insert(mons, {mid, name})
 
@@ -249,7 +251,7 @@ defmodule Clockatron do
 
   def handle_info({:DOWN, mid, :process, _pid, _error}, {o, procs, mons}) do
     case :ets.lookup(mons, mid) do
-      [{_, name, _, _}] ->
+      [{^mid, name}] ->
         :ets.delete(mons, mid)
 
         {module, function, args} = :ets.lookup_element(procs, name, 4)
@@ -282,7 +284,7 @@ defmodule Clockatron do
     {:noreply, {o, procs, mons}}
   end
 
-  def handle_info(unhandled_msg, state) do
+  def handle_info(_unhandled_msg, state) do
     {:noreply, state}
   end
 end
