@@ -3,7 +3,7 @@ defmodule Clockatron.App do
 
   def start(_type, _args) do
     children = [
-      {HashRing, :erlang.nodes() ++ [node()]},
+      {HashRing, Node.list() ++ [node()]},
       {Clockatron.Listener, :ok},
       {Clockatron, :ok}
     ]
@@ -111,7 +111,7 @@ defmodule Clockatron do
     :ets.insert(mons, {mid, name})
 
     :gen_server.multi_call(
-      :erlang.nodes,
+      Node.list(),
       Clockatron,
       {:new_process, {name, start}}
     )
@@ -135,13 +135,15 @@ defmodule Clockatron do
           {:resume, name, state, start}
         )
 
+        :ets.insert(o, {name, start})
+
         {:reply, :ok, {o, procs, mons}}
       [] ->
         {:reply, {:error, :noproc}, {o, procs, mons}}
     end
   end
 
-  def handle_call({:resume, name, state, start}, from, {o, procs, mons}) do
+  def handle_call({:resume, name, state, start}, _from, {o, procs, mons}) do
     {module, function, _} = start
     pid = :proc_lib.spawn(
       fn ->
@@ -156,9 +158,6 @@ defmodule Clockatron do
     :ets.delete(o, name)
     :ets.insert(procs, {name, pid, mid, start})
     :ets.insert(mons, {mid, name})
-
-    # make sure they keep this proc in `others`
-    send from, {:new_process, {name, start}}
 
     {:reply, :ok, {o, procs, mons}}
   end
@@ -197,7 +196,7 @@ defmodule Clockatron do
       handle_call({:move, name, where}, 1, {o, procs, mons})
     end
 
-    case :net_kernel.stop() do
+    case Node.stop() do
       {:error, :not_allowed} ->
         :init.stop()
       _ -> nil
